@@ -8,6 +8,7 @@ import dev.frozenmilk.dairy.calcified.hardware.controller.compiler.Pose2DControl
 import dev.frozenmilk.dairy.calcified.hardware.controller.compiler.Vector2DControllerCompiler
 import dev.frozenmilk.dairy.calcified.hardware.controller.implementation.Pose2DController
 import dev.frozenmilk.dairy.calcified.hardware.controller.implementation.Vector2DController
+import dev.frozenmilk.dairy.calcified.hardware.motor.Direction
 import dev.frozenmilk.dairy.core.util.OpModeLazyCell
 import dev.frozenmilk.dairy.core.util.supplier.numeric.MotionComponents
 import dev.frozenmilk.dairy.core.util.supplier.numeric.unit.EnhancedUnitSupplier
@@ -26,6 +27,10 @@ class MecanumDrive : Drivetrain {
 	val fl by OpModeLazyCell { Calcified.controlHub.getMotor(Ports.fl) }
 	val br by OpModeLazyCell { Calcified.controlHub.getMotor(Ports.br) }
 	val bl by OpModeLazyCell { Calcified.controlHub.getMotor(Ports.bl) }
+
+	val right by OpModeLazyCell { listOf(fr, br).map { it.direction = Direction.REVERSE } }
+	val left by OpModeLazyCell { listOf(fl, bl) }
+
 	val motors by OpModeLazyCell { listOf(fr, fl, br, bl) }
 
 	val p2p = P2P(this)
@@ -39,13 +44,15 @@ class MecanumDrive : Drivetrain {
 	override fun move(transformation: Pose2D) {
 		val normalized = transformation.vector2D.normalise(1.inches)
 
-		val speed = normalized.magnitude.value
+		val speed = normalized.magnitude.intoInches().value
 		val heading = normalized.theta.intoWrapping()
 
-		val rotation = transformation.heading
+		val rotation = transformation.heading.intoRadians().value
 
-		listOf(fl, br).forEach { it.power = (heading + 45.wrappedDeg).sin * speed }
-		listOf(fr, bl).forEach { it.power = (heading - 45.wrappedDeg).sin * speed }
+		fun base(sign: Double) = (heading + (45.wrappedDeg) * sign).sin * speed + rotation
+
+		listOf(fl, br).forEach { it.power = base(1.0) }
+		listOf(fr, bl).forEach { it.power = base(-1.0) }
 	}
 
 	override fun update() {
